@@ -1,0 +1,17 @@
+{
+	"show_video": true,
+	"warmup_time": 2.5,
+	"delta_thresh": 5,
+	"resolution": [640, 480],
+	"framerate": 30,
+	"min_area": 5000,
+	"base_path": "./images",
+	"save_images": true,
+	"email": {
+		"from": "",
+		"to": "",
+		"password": "",
+		"host": "",
+		"interval": 30
+	}
+}
