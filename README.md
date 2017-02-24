@@ -1,7 +1,6 @@
 # homewatch
 
-Monitor your home with a Raspberry Pi and a Pi camera. The Pi camera is used to detect motion and 
-the once motion is detected the relevant frames are saved to disk and, optionally, sent via email. 
+Monitor your home with a Raspberry Pi and a Pi camera. 
 
 Based on [Home surveillance and motion detection with the Raspberry Pi, Python, OpenCV, and Dropbox](http://www.pyimagesearch.com/2015/06/01/home-surveillance-and-motion-detection-with-the-raspberry-pi-python-and-opencv/) article.
 
