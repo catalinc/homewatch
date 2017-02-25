@@ -6,8 +6,8 @@
 	"framerate": 30,
 	"min_area": 5000,
 	"base_path": "./images",
-	"save_images": true,
 	"email": {
+		"enabled": false,
 		"from": "",
 		"to": "",
 		"password": "",

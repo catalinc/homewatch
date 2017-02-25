@@ -4,6 +4,7 @@ import datetime
 import json
 import time
 import os
+import signal
 import sys
 import smtplib
 from email.mime.image import MIMEImage
@@ -22,6 +23,7 @@ class Camera(object):
 
     def __init__(self, config):
         self._config = config
+        self._stop = False
 
     def capture(self, handlers=()):
         """ Start capture and detect motion """
@@ -31,6 +33,7 @@ class Camera(object):
         raw_capture = PiRGBArray(camera, size=camera.resolution)
         avg_frame = None
         time.sleep(self._config["warmup_time"])
+        _LOG.info("capturing...")
         try:
             for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
                 current_frame = frame.array
@@ -85,14 +88,19 @@ class Camera(object):
 
                 if self._config["show_video"]:
                     cv2.imshow("Camera Feed", current_frame)
-                    key = cv2.waitKey(1) & 0xFF
-                    if key == ord("q"):
-                        break
+                    cv2.waitKey(1) & 0xFF
 
                 # clear the stream in preparation for the next frame
                 raw_capture.truncate(0)
+                if self._stop:
+                    break
         except PiCameraError as ex:
             _LOG.error("camera error: %s", ex)
+        _LOG.info("capture stopped")
+
+    def stop(self):
+        """ Stop capture """
+        self._stop = True
 
     def _write_image(self, frame, timestamp):
         base_path = self._config["base_path"]
@@ -159,8 +167,16 @@ def _main():
     with open(args.configuration) as conf_file:
         config = json.load(conf_file)
         camera = Camera(config)
-        _LOG.info("capturing...")
-        camera.capture(handlers=[EmailHandler(config)])
+
+        def _exit_handler(signal, frame):
+            camera.stop()
+        signal.signal(signal.SIGINT, _exit_handler)
+        signal.signal(signal.SIGTERM, _exit_handler)
+
+        handlers = []
+        if config['email']['enabled']:
+            handlers.append(EmailHandler(config))
+        camera.capture(handlers=handlers)
 
 if __name__ == "__main__":
     _main()
