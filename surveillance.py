@@ -157,26 +157,41 @@ class EmailHandler(object):
 
 def _main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--configuration", required=True,
+    parser.add_argument("-c", "--configuration", required=False,
                         help="path to the configuration file")
     args = parser.parse_args()
 
     logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                         format="%(asctime)s - %(levelname)s - %(message)s")
 
-    with open(args.configuration) as conf_file:
-        config = json.load(conf_file)
-        camera = Camera(config)
+    # defaults
+    config = {
+        "show_video": True,
+        "warmup_time": 2,
+        "delta_thresh": 5,
+        "resolution": [640, 480],
+        "framerate": 16,
+        "min_area": 5000,
+        "base_path": "./motion",
+        "email": {
+            "enabled": False
+        }
+    }
+    if args.configuration:
+        with open(args.configuration) as conf_file:
+            config.update(json.load(conf_file))
 
-        def _exit_handler(signal, frame):
-            camera.stop()
-        signal.signal(signal.SIGINT, _exit_handler)
-        signal.signal(signal.SIGTERM, _exit_handler)
+    camera = Camera(config)
 
-        handlers = []
-        if config['email']['enabled']:
-            handlers.append(EmailHandler(config))
-        camera.capture(handlers=handlers)
+    def _exit_handler(signal, frame):
+        camera.stop()
+    signal.signal(signal.SIGINT, _exit_handler)
+    signal.signal(signal.SIGTERM, _exit_handler)
+
+    handlers = []
+    if config['email']['enabled']:
+        handlers.append(EmailHandler(config))
+    camera.capture(handlers=handlers)
 
 if __name__ == "__main__":
     _main()
