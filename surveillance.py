@@ -63,14 +63,14 @@ class Camera(object):
                 _, countours, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
                                                    cv2.CHAIN_APPROX_SIMPLE)
 
-                for countour in countours:
+                for contour in countours:
                     # if the contour is too small, ignore it
-                    if cv2.contourArea(countour) < self._config["min_area"]:
+                    if cv2.contourArea(contour) < self._config["min_area"]:
                         continue
 
                     # compute the bounding box for the contour and draw it on
                     # the frame
-                    (x_start, y_start, width, height) = cv2.boundingRect(countour)
+                    (x_start, y_start, width, height) = cv2.boundingRect(contour)
                     cv2.rectangle(current_frame, (x_start, y_start),
                                   (x_start + width, y_start + height), (0, 255, 0), 2)
                     motion = True
