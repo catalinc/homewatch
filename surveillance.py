@@ -35,7 +35,9 @@ class Camera(object):
         time.sleep(self._config["warmup_time"])
         _LOG.info("capturing...")
         try:
-            for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
+            for frame in camera.capture_continuous(raw_capture,
+                                                   format="bgr",
+                                                   use_video_port=True):
                 current_frame = frame.array
                 timestamp = datetime.datetime.now()
                 motion = False
@@ -50,17 +52,19 @@ class Camera(object):
                     continue
 
                 # accumulate the weighted average between the current frame and
-                # previous frames, then compute the difference between the current
-                # frame and running average
+                # previous frames, then compute the difference between
+                # the current frame and running average
                 cv2.accumulateWeighted(gray, avg_frame, 0.5)
                 frame_delta = cv2.absdiff(gray, cv2.convertScaleAbs(avg_frame))
 
-                # threshold the delta image, dilate the thresholded image to fill
-                # in holes, then find contours on thresholded image
-                thresh = cv2.threshold(frame_delta, self._config["delta_thresh"], 255,
+                # threshold the delta image, dilate the thresholded image
+                # to fill in holes, then find contours on thresholded image
+                thresh = cv2.threshold(frame_delta,
+                                       self._config["delta_thresh"], 255,
                                        cv2.THRESH_BINARY)[1]
                 thresh = cv2.dilate(thresh, None, iterations=2)
-                _, countours, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
+                _, countours, _ = cv2.findContours(thresh.copy(),
+                                                   cv2.RETR_EXTERNAL,
                                                    cv2.CHAIN_APPROX_SIMPLE)
 
                 for contour in countours:
@@ -68,11 +72,12 @@ class Camera(object):
                     if cv2.contourArea(contour) < self._config["min_area"]:
                         continue
 
-                    # compute the bounding box for the contour and draw it on
-                    # the frame
-                    (x_start, y_start, width, height) = cv2.boundingRect(contour)
-                    cv2.rectangle(current_frame, (x_start, y_start),
-                                  (x_start + width, y_start + height), (0, 255, 0), 2)
+                    # compute the bounding box for the contour
+                    # and draw it on the frame
+                    (x, y, width, height) = cv2.boundingRect(contour)
+                    cv2.rectangle(current_frame,
+                                  (x, y),
+                                  (x + width, y + height), (0, 255, 0), 2)
                     motion = True
 
                 cv2.putText(current_frame,
@@ -107,7 +112,8 @@ class Camera(object):
         if not os.path.exists(base_path):
             os.makedirs(base_path)
         image_path = "{}/{}.png".format(base_path,
-                                        timestamp.strftime("%Y-%m-%d-%H-%M-%S-%f"))
+                                        timestamp.strftime(
+                                            "%Y-%m-%d-%H-%M-%S-%f"))
         cv2.imwrite(image_path, frame)
         _LOG.info("motion detected and recorded to '%s'", image_path)
         return image_path
@@ -192,6 +198,7 @@ def _main():
     if config['email']['enabled']:
         handlers.append(EmailHandler(config))
     camera.capture(handlers=handlers)
+
 
 if __name__ == "__main__":
     _main()
