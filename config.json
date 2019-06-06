@@ -1,6 +1,6 @@
 {
+	"video_device": 0,
 	"show_video": true,
-	"warmup_time": 2.5,
 	"delta_thresh": 5,
 	"resolution": [640, 480],
 	"framerate": 30,
