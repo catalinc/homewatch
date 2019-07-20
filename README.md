@@ -1,14 +1,13 @@
 # homewatch
 
-Monitor your home with a Raspberry Pi and a Pi camera. 
+Monitor your home with a Raspberry Pi and a web camera. 
 
 Based on [Home surveillance and motion detection with the Raspberry Pi, Python, OpenCV, and Dropbox](http://www.pyimagesearch.com/2015/06/01/home-surveillance-and-motion-detection-with-the-raspberry-pi-python-and-opencv/) article.
 
 ## Prerequisites
 
-- [Raspberry Pi 3 Model B](https://www.raspberrypi.org/products/raspberry-pi-3-model-b/)
-- [Pi Camera Module v2](https://www.raspberrypi.org/products/camera-module-v2/)
-- Python 2.7
+- Raspberry Pi 3 Model B
+- Python 3.5.3
 - OpenCV 3.1.0
 
 ## Installation
