@@ -51,6 +51,8 @@ Configuration:
 		"password": "",
         // SMTP host
 		"host": "",
+        // SMTP port
+        "port": 587,
         // Minimum interval between emails (in seconds)
 		"interval": 30
 	}

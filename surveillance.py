@@ -65,7 +65,7 @@ class Camera(object):
                     last_capture = now
                     image_path = self._save_image(frame, now)
                     for handler in motion_handlers:
-                        handler.send_mail(image_path, now)
+                        handler.handle(image_path, now)
 
             if self._config["show_video"]:
                 cv2.imshow("Camera", frame)

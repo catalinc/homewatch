@@ -13,12 +13,13 @@ class Mailer(object):
         self._config = config
         self._last_send = datetime.datetime.utcfromtimestamp(0)
 
-    def send_mail(self, image_path, timestamp):
+    def handle(self, image_path, timestamp):
         interval = self._config['email']['interval']
         if (timestamp - self._last_send).total_seconds() >= interval:
             from_addr = self._config['email']['from']
             password = self._config['email']['password']
             host = self._config['email']['host']
+            port = self._config['email']['port']
             to_addr = self._config['email']['to']
             subject = "Motion detected at %s" % timestamp.strftime(
                 "%A %d %B %Y %I:%M:%S %p")
@@ -33,8 +34,7 @@ class Mailer(object):
                 image = MIMEImage(image_file.read())
                 message.attach(image)
                 try:
-                    server = smtplib.SMTP(host)
-                    server.ehlo()
+                    server = smtplib.SMTP(host, port)
                     server.starttls()
                     server.login(from_addr, password)
                     server.sendmail(from_addr, to_addr, message.as_string())
