@@ -2,10 +2,11 @@
 	"video_device": 0,
 	"show_video": true,
 	"delta_thresh": 5,
-	"resolution": [640, 480],
 	"framerate": 30,
 	"min_area": 5000,
-	"base_path": "./images",
+	"min_interval": 5000,
+	"base_path": "./data",
+	"image_ext": "png",
 	"email": {
 		"enabled": false,
 		"from": "",

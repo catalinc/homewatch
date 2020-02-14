@@ -1,42 +1,38 @@
-import logging
 import argparse
 import datetime
 import json
+import logging
 import os
 import signal
-import sys
-import smtplib
 import cv2
-from email.mime.image import MIMEImage
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import sys
+
+from mailer import Mailer
 
 _LOG = logging.getLogger(__name__)
 
 
 class Camera(object):
-    """ Video capture device wrapper with motion detection capabilities """
-
     def __init__(self, config):
         self._config = config
         self._running = False
 
-    def capture(self, handlers=()):
-        """ Start capture and detect motion """
-        device_id = self._config["video_device"]
-        _LOG.info("opening video device {}".format(device_id))
-        cam = cv2.VideoCapture(device_id)
+    def start(self, motion_handlers=()):
+        _LOG.info("opening device")
+        video = cv2.VideoCapture(self._config["video_device"])
+        video.set(cv2.CAP_PROP_FPS, self._config["framerate"])
         avg_frame = None
+        last_capture = datetime.datetime.utcfromtimestamp(0)
+        _LOG.info("starting capture")
         self._running = True
-        _LOG.info("capturing...")
         while self._running:
-            _, frame = cam.read()
-            current_frame = frame
-            timestamp = datetime.datetime.now()
-            motion = False
+            grabbed, frame = video.read()
+            if not grabbed:
+                continue
+            now = datetime.datetime.now()
+            is_motion = False
 
-            # convert it to grayscale and blur it
-            gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
             if avg_frame is None:
@@ -49,104 +45,51 @@ class Camera(object):
             cv2.accumulateWeighted(gray, avg_frame, 0.5)
             frame_delta = cv2.absdiff(gray, cv2.convertScaleAbs(avg_frame))
 
-            # threshold the delta image, dilate the thresholded image
-            # to fill in holes, then find contours on thresholded image
-            _, thresh = cv2.threshold(frame_delta,
-                                      self._config["delta_thresh"], 255,
-                                      cv2.THRESH_BINARY)
+            # threshold the delta image, dilate the threshold-ed image
+            # to fill in holes, then find contours on threshold-ed image
+            _, thresh = cv2.threshold(frame_delta, self._config["delta_thresh"], 255, cv2.THRESH_BINARY)
             thresh = cv2.dilate(thresh, None, iterations=2)
-            countours, _ = cv2.findContours(thresh,
-                                            cv2.RETR_EXTERNAL,
-                                            cv2.CHAIN_APPROX_SIMPLE)
-
-            for contour in countours:
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            for contour in contours:
                 # if the contour is too small, ignore it
                 if cv2.contourArea(contour) < self._config["min_area"]:
                     continue
-
-                # compute the bounding box for the contour
-                # and draw it on the frame
                 (x, y, width, height) = cv2.boundingRect(contour)
-                cv2.rectangle(current_frame,
-                              (x, y),
-                              (x + width, y + height), (0, 255, 0), 2)
-                motion = True
+                cv2.rectangle(frame, (x, y), (x + width, y + height), (0, 255, 0), 2)
+                is_motion = True
 
-            cv2.putText(current_frame,
-                        timestamp.strftime("%A %d %B %Y %I:%M:%S%p"),
-                        (10, current_frame.shape[0] - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
-            if motion:
-                cv2.putText(current_frame, "Motion detected", (10, 20),
+            if is_motion:
+                cv2.putText(frame, "Motion detected", (10, 20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                image_path = self._write_image(current_frame, timestamp)
-                for handler in handlers:
-                    handler.handle(image_path, timestamp)
+                if (now - last_capture).total_seconds() >= self._config["min_interval"]:
+                    last_capture = now
+                    image_path = self._save_image(frame, now)
+                    for handler in motion_handlers:
+                        handler.send_mail(image_path, now)
 
             if self._config["show_video"]:
-                cv2.imshow("Camera Feed", current_frame)
-                cv2.waitKey(1) & 0xFF
+                cv2.imshow("Camera", frame)
+                # break on ESC
+                if cv2.waitKey(10) & 0xFF == 27:
+                    break
 
-        cam.release()
+        video.release()
         _LOG.info("capture stopped")
 
     def stop(self):
-        """ Stop capture """
         self._running = False
 
-    def _write_image(self, frame, timestamp):
-        base_path = self._config["base_path"]
+    def _save_image(self, frame, timestamp):
+        ymd = timestamp.strftime("%Y-%m-%d")
+        base_path = "{}/{}".format(self._config["base_path"], ymd)
+        image_ext = self._config["image_ext"]
+        file_name = timestamp.strftime("%H-%M-%S-%f")
+        image_path = "{}/{}.{}".format(base_path, file_name, image_ext)
         if not os.path.exists(base_path):
             os.makedirs(base_path)
-        image_path = "{}/{}.png".format(base_path,
-                                        timestamp.strftime(
-                                            "%Y-%m-%d-%H-%M-%S-%f"))
         cv2.imwrite(image_path, frame)
-        _LOG.info("motion detected and recorded to '%s'", image_path)
+        _LOG.info("motion recorded to %s", image_path)
         return image_path
-
-
-class EmailHandler(object):
-    """ Motion handler for sending images via email """
-
-    def __init__(self, config):
-        self._config = config
-        interval = self._config['email']['interval']
-        now = datetime.datetime.now()
-        self._last_time = now - datetime.timedelta(seconds=interval)
-
-    def handle(self, image_path, timestamp):
-        """ Send email when motion is detected """
-        interval = self._config['email']['interval']
-        elapsed = timestamp - self._last_time
-        if elapsed.total_seconds() >= interval:
-            from_addr = self._config['email']['from']
-            password = self._config['email']['password']
-            host = self._config['email']['host']
-            to_addr = self._config['email']['to']
-            subject = "Motion detected on %s" % timestamp.strftime(
-                "%A %d %B %Y %I:%M:%S %p")
-
-            message = MIMEMultipart()
-            message['Subject'] = subject
-            message['From'] = from_addr
-            message['To'] = to_addr
-            text = MIMEText(subject)
-            message.attach(text)
-            with open(image_path, 'rb') as image_file:
-                image = MIMEImage(image_file.read())
-                message.attach(image)
-                try:
-                    server = smtplib.SMTP(host)
-                    server.ehlo()
-                    server.starttls()
-                    server.login(from_addr, password)
-                    server.sendmail(from_addr, to_addr, message.as_string())
-                    server.quit()
-                    self._last_time = timestamp
-                    _LOG.info("email sent with subject '%s'", subject)
-                except smtplib.SMTPException as ex:
-                    _LOG.error("email error: %s", ex)
 
 
 def main():
@@ -156,17 +99,18 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                        format="%(asctime)s - %(levelname)s - %(message)s")
+                        format="%(asctime)s [%(levelname)s] - %(message)s")
 
     # defaults
     config = {
         "video_device": 0,
         "show_video": True,
         "delta_thresh": 5,
-        "resolution": [640, 480],
-        "framerate": 16,
+        "framerate": 10,
         "min_area": 5000,
-        "base_path": "./motion",
+        "min_interval": 10,
+        "base_path": "./data",
+        "image_ext": "png",
         "email": {
             "enabled": False
         }
@@ -177,7 +121,7 @@ def main():
 
     camera = Camera(config)
 
-    def _exit_handler(signal, frame):
+    def _exit_handler(signal_code, frame):
         camera.stop()
         cv2.destroyAllWindows()
 
@@ -186,8 +130,8 @@ def main():
 
     handlers = []
     if config['email']['enabled']:
-        handlers.append(EmailHandler(config))
-    camera.capture(handlers=handlers)
+        handlers.append(Mailer(config))
+    camera.start(motion_handlers=handlers)
 
 
 if __name__ == "__main__":
