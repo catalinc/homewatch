@@ -91,6 +91,7 @@ ENV/
 # Project specific
 *-dev.json
 images/
+data/
 
 # Idea
 .idea/
