@@ -5,6 +5,7 @@ import logging
 import os
 import signal
 import threading
+import time
 import cv2
 import sys
 
@@ -29,13 +30,25 @@ class Camera(object):
         last_capture = datetime.datetime.utcfromtimestamp(0)
         frame_count = 0
         skip_frames = self._config.get("skip_frames", 2)
+        consecutive_failures = 0
 
         _LOG.info("starting capture")
         self._running = True
         while self._running:
             grabbed, frame = video.read()
             if not grabbed:
+                consecutive_failures += 1
+                if consecutive_failures >= 10:
+                    _LOG.warning("camera unavailable, retrying in 5s...")
+                    video.release()
+                    time.sleep(5)
+                    video = cv2.VideoCapture(self._config["video_device"])
+                    video.set(cv2.CAP_PROP_FPS, self._config["framerate"])
+                    video.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    avg_frame = None
+                    consecutive_failures = 0
                 continue
+            consecutive_failures = 0
 
             frame_count += 1
             if frame_count % skip_frames != 0:
