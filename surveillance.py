@@ -104,6 +104,8 @@ class Camera(object):
                 cv2.imshow("Camera", frame)
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
+                if not self._running:
+                    break
                 if cv2.getWindowProperty("Camera", cv2.WND_PROP_VISIBLE) < 1:
                     break
 
