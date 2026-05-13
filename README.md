@@ -31,14 +31,18 @@ Configuration:
 	"delta_thresh": 5,
     // FPS
 	"framerate": 30,
-    // Minimum countour area for detecting motion.
+    // Process every Nth frame. Higher values reduce CPU load at the cost of detection latency.
+	"skip_frames": 2,
+    // Width (in pixels) to downscale frames to before motion detection. Lower = faster.
+	"process_width": 500,
+    // Minimum contour area for detecting motion.
 	"min_area": 5000,
     // Minimum interval between two detections (in seconds).
 	"min_interval": 5,
     // Where to save the frames containing motion.
 	"base_path": "./data",
-    // Image type
-	"image_ext": "png",
+    // Image format for saved frames. Use "jpg" for faster writes, "png" for lossless.
+	"image_ext": "jpg",
     // Send emails with frames containing motion.
 	"email": {
         // Send emails?
