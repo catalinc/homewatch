@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import signal
+import threading
 import cv2
 import sys
 
@@ -21,14 +22,25 @@ class Camera(object):
         _LOG.info("opening device")
         video = cv2.VideoCapture(self._config["video_device"])
         video.set(cv2.CAP_PROP_FPS, self._config["framerate"])
+        video.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         avg_frame = None
         last_capture = datetime.datetime.utcfromtimestamp(0)
+        frame_count = 0
+        skip_frames = self._config.get("skip_frames", 2)
+
         _LOG.info("starting capture")
         self._running = True
         while self._running:
             grabbed, frame = video.read()
             if not grabbed:
                 continue
+
+            frame_count += 1
+            if frame_count % skip_frames != 0:
+                continue
+
             now = datetime.datetime.now()
             is_motion = False
 
@@ -41,7 +53,7 @@ class Camera(object):
             scale_x, scale_y = w / proc_w, h / proc_h
             gray = cv2.resize(gray, (proc_w, proc_h))
 
-            gray = cv2.GaussianBlur(gray, (21, 21), 0)
+            gray = cv2.GaussianBlur(gray, (11, 11), 0)
 
             if avg_frame is None:
                 avg_frame = gray.copy().astype("float")
@@ -51,7 +63,7 @@ class Camera(object):
             frame_delta = cv2.absdiff(gray, cv2.convertScaleAbs(avg_frame))
 
             _, thresh = cv2.threshold(frame_delta, self._config["delta_thresh"], 255, cv2.THRESH_BINARY)
-            thresh = cv2.dilate(thresh, None, iterations=2)
+            thresh = cv2.dilate(thresh, kernel, iterations=2)
             contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             scaled_min_area = self._config["min_area"] / (scale_x * scale_y)
             for contour in contours:
@@ -68,9 +80,12 @@ class Camera(object):
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
                 if (now - last_capture).total_seconds() >= self._config["min_interval"]:
                     last_capture = now
-                    image_path = self._save_image(frame, now)
-                    for handler in motion_handlers:
-                        handler.handle(image_path, now)
+                    frame_copy = frame.copy()
+                    threading.Thread(
+                        target=self._save_and_notify,
+                        args=(frame_copy, now, motion_handlers),
+                        daemon=True
+                    ).start()
 
             if self._config["show_video"]:
                 cv2.imshow("Camera", frame)
@@ -82,6 +97,11 @@ class Camera(object):
 
     def stop(self):
         self._running = False
+
+    def _save_and_notify(self, frame, timestamp, handlers):
+        image_path = self._save_image(frame, timestamp)
+        for handler in handlers:
+            handler.handle(image_path, timestamp)
 
     def _save_image(self, frame, timestamp):
         ymd = timestamp.strftime("%Y-%m-%d")
@@ -109,11 +129,12 @@ def main():
         "show_video": True,
         "delta_thresh": 5,
         "framerate": 30,
+        "skip_frames": 2,
         "min_area": 5000,
         "min_interval": 10,
         "process_width": 500,
         "base_path": "./data",
-        "image_ext": "png",
+        "image_ext": "jpg",
         "email": {
             "enabled": False
         }
