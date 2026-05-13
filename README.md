@@ -19,6 +19,8 @@ Based on [Home surveillance and motion detection with the Raspberry Pi, Python, 
 
 Edit `config.json` to adjust the configuration. Run the script with `python surveillance.py -c config.json`.
 
+If the camera becomes unavailable (e.g. USB disconnect), the script will automatically attempt to reconnect every 5 seconds until the device is restored.
+
 Configuration:
 
 ```
