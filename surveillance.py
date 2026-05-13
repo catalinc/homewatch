@@ -33,29 +33,34 @@ class Camera(object):
             is_motion = False
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            # Downscale before heavy processing; scale contours back for display
+            h, w = gray.shape[:2]
+            proc_w = self._config.get("process_width", 500)
+            proc_h = int(h * proc_w / w)
+            scale_x, scale_y = w / proc_w, h / proc_h
+            gray = cv2.resize(gray, (proc_w, proc_h))
+
             gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
             if avg_frame is None:
                 avg_frame = gray.copy().astype("float")
                 continue
 
-            # accumulate the weighted average between the current frame and
-            # previous frames, then compute the difference between
-            # the current frame and running average
-            cv2.accumulateWeighted(gray, avg_frame, 0.5)
+            cv2.accumulateWeighted(gray, avg_frame, 0.1)
             frame_delta = cv2.absdiff(gray, cv2.convertScaleAbs(avg_frame))
 
-            # threshold the delta image, dilate the threshold-ed image
-            # to fill in holes, then find contours on threshold-ed image
             _, thresh = cv2.threshold(frame_delta, self._config["delta_thresh"], 255, cv2.THRESH_BINARY)
             thresh = cv2.dilate(thresh, None, iterations=2)
             contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            scaled_min_area = self._config["min_area"] / (scale_x * scale_y)
             for contour in contours:
-                # if the contour is too small, ignore it
-                if cv2.contourArea(contour) < self._config["min_area"]:
+                if cv2.contourArea(contour) < scaled_min_area:
                     continue
                 (x, y, width, height) = cv2.boundingRect(contour)
-                cv2.rectangle(frame, (x, y), (x + width, y + height), (0, 255, 0), 2)
+                x1, y1 = int(x * scale_x), int(y * scale_y)
+                x2, y2 = int((x + width) * scale_x), int((y + height) * scale_y)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 is_motion = True
 
             if is_motion:
@@ -69,8 +74,7 @@ class Camera(object):
 
             if self._config["show_video"]:
                 cv2.imshow("Camera", frame)
-                # break on ESC
-                if cv2.waitKey(10) & 0xFF == 27:
+                if cv2.waitKey(1) & 0xFF == 27:
                     break
 
         video.release()
@@ -85,8 +89,7 @@ class Camera(object):
         image_ext = self._config["image_ext"]
         file_name = timestamp.strftime("%H-%M-%S-%f")
         image_path = "{}/{}.{}".format(base_path, file_name, image_ext)
-        if not os.path.exists(base_path):
-            os.makedirs(base_path)
+        os.makedirs(base_path, exist_ok=True)
         cv2.imwrite(image_path, frame)
         _LOG.info("motion recorded to %s", image_path)
         return image_path
@@ -101,14 +104,14 @@ def main():
     logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                         format="%(asctime)s [%(levelname)s] - %(message)s")
 
-    # defaults
     config = {
         "video_device": 0,
         "show_video": True,
         "delta_thresh": 5,
-        "framerate": 10,
+        "framerate": 30,
         "min_area": 5000,
         "min_interval": 10,
+        "process_width": 500,
         "base_path": "./data",
         "image_ext": "png",
         "email": {
